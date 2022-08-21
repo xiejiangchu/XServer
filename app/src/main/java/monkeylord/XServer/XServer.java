@@ -24,6 +24,7 @@ import monkeylord.XServer.api.Tracer;
 import monkeylord.XServer.api.WsScript;
 import monkeylord.XServer.api.wsMethodViewNew;
 import monkeylord.XServer.api.wsTracerNew;
+import monkeylord.XServer.handler.ClassHandler;
 import monkeylord.XServer.handler.ObjectHandler;
 import monkeylord.XServer.objectparser.BooleanParser;
 import monkeylord.XServer.objectparser.ByteArrayParser;
@@ -45,6 +46,19 @@ public class XServer extends NanoWSD {
     public static String currentApp = "";
     public static AssetManager assetManager;
     public static Application currentApplication = null;
+    public static XServer instance=null;
+
+    public static Application getCurrentApplication(){
+        if(currentApplication!=null)return currentApplication;
+        else {
+            try {
+                currentApplication = (Application) Class.forName("android.app.ActivityThread").getDeclaredMethod("currentApplication").invoke(null);
+                return currentApplication;
+            }catch (Exception e){
+                return null;
+            }
+        }
+    }
 
     public XServer(int port) {
         this(port, null);
@@ -53,7 +67,7 @@ public class XServer extends NanoWSD {
     public XServer(int port, Hashtable<String, Operation> route) {
         super(port);
         //确定应用名称
-        if (currentApp == "") {
+        if (currentApp.equals("")) {
             try {
                 currentApp = (String) Class.forName("android.app.ActivityThread").getDeclaredMethod("currentPackageName").invoke(null);
                 currentApplication = (Application) Class.forName("android.app.ActivityThread").getDeclaredMethod("currentApplication").invoke(null);
@@ -97,9 +111,13 @@ public class XServer extends NanoWSD {
         try {
             //启动监听
             start(0, false);
+            instance = this;
         } catch (IOException e) {
             e.printStackTrace();
         }
+        ClassHandler.classLoaders.put("default-"+classLoader.hashCode(),classLoader);
+        ClassHandler.monitorClassloaders(classLoader);
+        if(getCurrentApplication()!=null)ClassHandler.classLoaders.put("application-"+getCurrentApplication().getClassLoader().hashCode(),getCurrentApplication().getClassLoader());
     }
 
     @Override
@@ -193,6 +211,7 @@ public class XServer extends NanoWSD {
                 map.put("params", session.getParms());
                 map.put("headers", session.getHeaders());
                 map.put("clzs", DexHelper.getClassesInDex(XServer.classLoader));
+                map.put("classloaders", ClassHandler.getClassLoaderDescriptions());
                 map.put("parsers", parsers);
                 map.put("objs", ObjectHandler.objects);
                 map.put("pid", String.valueOf(Process.myPid()));
